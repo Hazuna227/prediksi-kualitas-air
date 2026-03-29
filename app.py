@@ -120,7 +120,7 @@ if menu == "Input & Prediksi":
     st.title("💧 Prediksi Kualitas Air Sungai")
 
     # ---------------- INPUT MANUAL ----------------
-    st.subheader("📝 Input Manual")
+    st.subheader("📝 Input Data Parameter")
     c1, c2 = st.columns(2)
 
     with c1:
