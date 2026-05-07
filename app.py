@@ -397,16 +397,23 @@ elif menu == "📚 Hasil Pelatihan Model":
     st.subheader("Evaluasi Kinerja Model")
 
     # ================= CLASSIFICATION REPORT =================
-    st.subheader("Classification Report")
-
     col1, col2 = st.columns(2)
 
     with col1:
         df_report = pd.read_excel("HASIL_PENELITIAN_XGBOOST/02_classification_report.xlsx")
         st.dataframe(df_report, use_container_width=True)
-
+        st.markdown(
+        """
+        <div style='text-align: center; font-size:14px; color:gray; margin-top:5px;'>
+            Classification Report Model XGBoost
+        </div>
+        """,
+        unsafe_allow_html=True
+        )
     with col2:
         st.markdown("""
+        **Classification Report**
+        
         Classification report digunakan untuk mengevaluasi performa model klasifikasi 
         secara lebih rinci dibandingkan hanya menggunakan akurasi.
 
