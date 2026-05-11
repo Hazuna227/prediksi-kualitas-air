@@ -109,7 +109,7 @@ def hitung_ip(row):
 # =====================================================
 # SESSION
 # =====================================================
-KOL = ["Tanggal","Temperatur","pH","DO","BOD","COD","TSS","TDS","Nilai IP","Hasil Prediksi"]
+KOL = ["Tanggal","Lokasi","Temperatur","pH","DO","BOD","COD","TSS","TDS","Nilai IP","Hasil Prediksi"]
 
 if "data_all" not in st.session_state:
     st.session_state.data_all = pd.DataFrame(columns=KOL)
@@ -145,11 +145,13 @@ if menu == "🏠 Input & Prediksi":
         cod = st.number_input("COD - Chemical Oxygen Demand (mg/L)", 0.0, 100.0, 25.0)
         tss = st.number_input("TSS - Total Suspended Solid (mg/L)", 0.0, 500.0, 50.0)
         tds = st.number_input("TDS - Total Dissolved Solid (mg/L)", 0.0, 5000.0, 1000.0)
+        lokasi = st.text_input("Lokasi Pengambilan Sampel")
         tanggal = st.date_input("Tanggal")
 
     if st.button("🔍 Prediksi & Simpan"):
         df_new = pd.DataFrame([{
             "Tanggal": tanggal,
+            "Lokasi": lokasi,
             "Temperatur": temperatur,
             "pH": ph,
             "DO": do,
@@ -176,7 +178,7 @@ if menu == "🏠 Input & Prediksi":
     st.subheader("📥 Download Template Excel")
 
     template = pd.DataFrame(columns=[
-        "Tanggal","Temperatur","pH","DO","BOD","COD","TSS","TDS"
+        "Tanggal","Lokasi","Temperatur","pH","DO","BOD","COD","TSS","TDS"
     ])
     download_excel(template, "template_kualitas_air.xlsx")
 
@@ -186,25 +188,103 @@ if menu == "🏠 Input & Prediksi":
 
     file = st.file_uploader("Upload CSV / Excel", type=["csv", "xlsx"])
 
-    if file is not None:
-        df_up = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+if file is not None:
 
-        df_up["Tanggal"] = pd.to_datetime(df_up["Tanggal"]).dt.date
+    df_up = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-        df_up["Nilai IP"] = df_up.apply(hitung_ip, axis=1)
+    # ================= VALIDASI KOLOM =================
+    kolom_wajib = [
+        "Tanggal","Lokasi","Temperatur","pH",
+        "DO","BOD","COD","TSS","TDS"
+    ]
 
-        df_up["Hasil Prediksi"] = np.where(
-            model.predict(df_up[fitur]) == 0,
-            "Memenuhi Baku Mutu",
-            "Tidak Memenuhi"
+    kolom_tidak_ada = [k for k in kolom_wajib if k not in df_up.columns]
+
+    if kolom_tidak_ada:
+        st.error(f"Kolom berikut tidak ditemukan: {kolom_tidak_ada}")
+        st.stop()
+
+    # ================= KONVERSI NUMERIK =================
+    kolom_numerik = [
+        "Temperatur","pH","DO","BOD",
+        "COD","TSS","TDS"
+    ]
+
+    for col in kolom_numerik:
+        df_up[col] = pd.to_numeric(df_up[col], errors="coerce")
+
+    # ================= CEK NILAI KOSONG =================
+    kosong = df_up[kolom_numerik].isnull().sum()
+
+if file is not None:
+
+    df_up = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+
+    # ================= VALIDASI KOLOM =================
+    kolom_wajib = [
+        "Tanggal","Lokasi","Temperatur","pH",
+        "DO","BOD","COD","TSS","TDS"
+    ]
+
+    kolom_tidak_ada = [k for k in kolom_wajib if k not in df_up.columns]
+
+    if kolom_tidak_ada:
+        st.error(f"Kolom berikut tidak ditemukan: {kolom_tidak_ada}")
+        st.stop()
+
+    # ================= KONVERSI NUMERIK =================
+    kolom_numerik = [
+        "Temperatur","pH","DO","BOD",
+        "COD","TSS","TDS"
+    ]
+
+    for col in kolom_numerik:
+        df_up[col] = pd.to_numeric(df_up[col], errors="coerce")
+
+    # ================= CEK NILAI KOSONG =================
+    kosong = df_up[kolom_numerik].isnull().sum()
+
+    if kosong.sum() > 0:
+
+        st.warning("⚠️ Ditemukan data kosong atau format angka tidak valid")
+
+        st.dataframe(
+            kosong[kosong > 0].reset_index().rename(
+                columns={
+                    "index": "Parameter",
+                    0: "Jumlah Kosong"
+                }
+            ),
+            use_container_width=True
         )
 
-        st.session_state.data_all = pd.concat(
-            [st.session_state.data_all, df_up[KOL]],
-            ignore_index=True
-        )
+        st.info("""
+        Pastikan seluruh parameter numerik terisi dengan benar sebelum dilakukan prediksi.
+        Contoh kesalahan:
+        - sel kosong
+        - teks pada kolom angka
+        - simbol atau format tidak sesuai
+        """)
 
-        st.success("Data berhasil diupload")
+        st.stop()
+
+    # ================= LANJUT PROSES =================
+    df_up["Tanggal"] = pd.to_datetime(df_up["Tanggal"]).dt.date
+
+    df_up["Nilai IP"] = df_up.apply(hitung_ip, axis=1)
+
+    df_up["Hasil Prediksi"] = np.where(
+        model.predict(df_up[fitur]) == 0,
+        "Memenuhi Baku Mutu",
+        "Tidak Memenuhi"
+    )
+
+    st.session_state.data_all = pd.concat(
+        [st.session_state.data_all, df_up[KOL]],
+        ignore_index=True
+    )
+
+    st.success("Data berhasil diupload")
 
     # ================= OUTPUT =================
     if not st.session_state.data_all.empty:
@@ -216,7 +296,7 @@ if menu == "🏠 Input & Prediksi":
 
         df["Tanggal"] = pd.to_datetime(df["Tanggal"])
 
-        colf1, colf2, colf3 = st.columns(3)
+        colf1, colf2, colf3, colf4 = st.columns(4)
 
         with colf1:
             tahun_list = sorted(df["Tanggal"].dt.year.unique())
@@ -232,8 +312,17 @@ if menu == "🏠 Input & Prediksi":
                 list(range(1, 13)),
                 default=list(range(1, 13))
             )
-
+        
         with colf3:
+            lokasi_list = sorted(df["Lokasi"].dropna().unique())
+
+            lokasi_filter = st.multiselect(
+                "Filter Lokasi",
+                lokasi_list,
+                default=lokasi_list
+            )
+
+        with colf4:
             tanggal_range = st.date_input(
                 "Filter Rentang Tanggal",
                 [df["Tanggal"].min(), df["Tanggal"].max()]
@@ -242,7 +331,8 @@ if menu == "🏠 Input & Prediksi":
         # ================= APPLY FILTER =================
         df_filter = df[
             df["Tanggal"].dt.year.isin(tahun) &
-            df["Tanggal"].dt.month.isin(bulan)
+            df["Tanggal"].dt.month.isin(bulan) &
+            df["Lokasi"].isin(lokasi_filter)
         ]
 
         # filter tanggal range
@@ -261,11 +351,18 @@ if menu == "🏠 Input & Prediksi":
         st.markdown("---")
         st.subheader("📋 Tabel Hasil Prediksi")
 
+        st.caption("""
+        Keterangan Status Mutu Air berdasarkan Nilai Indeks Pencemaran (IP):
+                   
+        • IP ≤ 1,0 → Memenuhi Baku Mutu  
+        • IP > 1,0 → Tidak Memenuhi Baku Mutu
+        """)
+
         df_tampil = df.copy()
         df_tampil["Tanggal"] = pd.to_datetime(df_tampil["Tanggal"]).dt.date
 
         st.dataframe(df_tampil, use_container_width=True)
-        
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -366,7 +463,7 @@ if menu == "🏠 Input & Prediksi":
 
         st.dataframe(
             df_compare_tampil[[
-                "Tanggal","Temperatur","pH","DO","BOD","COD","TSS","TDS",
+                "Tanggal","Lokasi","Temperatur","pH","DO","BOD","COD","TSS","TDS",
                 "Nilai IP","Status IP","Hasil Prediksi"
             ]],
             use_container_width=True
@@ -402,6 +499,7 @@ elif menu == "📚 Hasil Pelatihan Model":
     with col1:
         df_report = pd.read_excel("HASIL_PENELITIAN_XGBOOST/02_classification_report.xlsx")
         st.dataframe(df_report, use_container_width=True)
+
         st.markdown(
         """
         <div style='text-align: center; font-size:14px; color:gray; margin-top:5px;'>
@@ -410,10 +508,11 @@ elif menu == "📚 Hasil Pelatihan Model":
         """,
         unsafe_allow_html=True
         )
+
     with col2:
         st.markdown("""
         **Classification Report**
-        
+                    
         Classification report digunakan untuk mengevaluasi performa model klasifikasi 
         secara lebih rinci dibandingkan hanya menggunakan akurasi.
 
